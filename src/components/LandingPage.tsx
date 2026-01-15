@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { MapPin, Camera, Users, Trash2, ArrowRight, Recycle, Sparkles, TrendingUp, Bell, Shield } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Footer } from './Footer';
 
 interface LandingPageProps {
   onGetStarted: () => void;
