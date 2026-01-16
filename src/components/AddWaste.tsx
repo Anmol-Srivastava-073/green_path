@@ -1,28 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
-import {
-  CheckCircle,
-  Upload,
-  Locate,
-  MapPin,
-} from 'lucide-react';
+import { CheckCircle, Upload, Locate, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '../utils/supabase/client';
 
+/* ===============================
+   COMPONENT
+   =============================== */
 export function AddWaste() {
+  /* ---------- FORM STATE ---------- */
   const [title, setTitle] = useState('');
   const [type, setType] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
-  const [coords, setCoords] =
-    useState<{ lat: number; lng: number } | null>(null);
-
-  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
+  /* ---------- MAP STATE ---------- */
   const [leaflet, setLeaflet] = useState<any>(null);
 
+  /* ---------- REFS / CLIENT ---------- */
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -62,7 +61,7 @@ export function AddWaste() {
   };
 
   /* ===============================
-     IMAGE
+     IMAGE HANDLER
      =============================== */
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,20 +106,73 @@ export function AddWaste() {
       window.dispatchEvent(new CustomEvent('wastePostAdded'));
       setSubmitted(true);
 
-      setTimeout(() => {
-        setSubmitted(false);
-        setTitle('');
-        setType('');
-        setDescription('');
-        setImage(null);
-        setCoords(null);
-      }, 2000);
+      setTimeout(resetForm, 2000);
     } catch (err) {
       console.error(err);
       toast.error('Failed to add waste');
     } finally {
       setLoading(false);
     }
+  };
+
+  /* ===============================
+     RESET
+     =============================== */
+  const resetForm = () => {
+    setSubmitted(false);
+    setTitle('');
+    setType('');
+    setDescription('');
+    setImage(null);
+    setCoords(null);
+  };
+
+  /* ===============================
+     MAP HELPERS
+     =============================== */
+  const LocationPicker =
+    leaflet &&
+    function LocationPicker({
+      onSelect,
+    }: {
+      onSelect: (lat: number, lng: number) => void;
+    }) {
+      const { useMapEvents } = leaflet;
+      useMapEvents({
+        click(e: any) {
+          onSelect(e.latlng.lat, e.latlng.lng);
+        },
+      });
+      return null;
+    };
+
+  const renderMap = () => {
+    if (!leaflet) {
+      return (
+        <div className="h-full flex items-center justify-center text-gray-400">
+          Loading map…
+        </div>
+      );
+    }
+
+    const { MapContainer, TileLayer, Marker } = leaflet;
+
+    return (
+      <MapContainer
+        center={coords ? [coords.lat, coords.lng] : [20.5937, 78.9629]}
+        zoom={coords ? 14 : 5}
+        style={{ height: '100%', width: '100%' }}
+      >
+        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        <LocationPicker
+          onSelect={(lat, lng) => {
+            setCoords({ lat, lng });
+            toast.success('Location selected');
+          }}
+        />
+        {coords && <Marker position={[coords.lat, coords.lng]} />}
+      </MapContainer>
+    );
   };
 
   /* ===============================
@@ -143,22 +195,7 @@ export function AddWaste() {
   }
 
   /* ===============================
-     MAP PICKER (INLINE, SAFE)
-     =============================== */
-  const LocationPicker =
-    leaflet &&
-    function ({ onSelect }: { onSelect: (lat: number, lng: number) => void }) {
-      const { useMapEvents } = leaflet;
-      useMapEvents({
-        click(e: any) {
-          onSelect(e.latlng.lat, e.latlng.lng);
-        },
-      });
-      return null;
-    };
-
-  /* ===============================
-     FORM
+     FORM UI
      =============================== */
   return (
     <div className="max-w-2xl space-y-6">
@@ -191,35 +228,8 @@ export function AddWaste() {
           className="w-full px-4 py-3 border rounded-xl"
         />
 
-        {/* MAP */}
         <div className="h-64 rounded-xl overflow-hidden border">
-          {leaflet ? (
-            (() => {
-              const { MapContainer, TileLayer, Marker } = leaflet;
-              return (
-                <MapContainer
-                  center={
-                    coords ? [coords.lat, coords.lng] : [20.5937, 78.9629]
-                  }
-                  zoom={coords ? 14 : 5}
-                  style={{ height: '100%', width: '100%' }}
-                >
-                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <LocationPicker
-                    onSelect={(lat, lng) => {
-                      setCoords({ lat, lng });
-                      toast.success('Location selected');
-                    }}
-                  />
-                  {coords && <Marker position={[coords.lat, coords.lng]} />}
-                </MapContainer>
-              );
-            })()
-          ) : (
-            <div className="h-full flex items-center justify-center text-gray-400">
-              Loading map…
-            </div>
-          )}
+          {renderMap()}
         </div>
 
         <button
