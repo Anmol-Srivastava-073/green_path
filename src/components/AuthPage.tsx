@@ -12,7 +12,7 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { supabase } from '../utils/supabase/client';
+import { createClient } from '../utils/supabase/client'; // Ensure this path is correct
 import { toast } from 'sonner';
 
 interface AuthPageProps {
@@ -26,6 +26,8 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const supabase = createClient(); // Use the client creator
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -33,7 +35,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   });
 
   /* ===============================
-     SSR SAFETY
+      SSR SAFETY
      =============================== */
   useEffect(() => {
     setMounted(true);
@@ -42,7 +44,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   if (!mounted) return null;
 
   /* ===============================
-     SIGN UP
+      SIGN UP
      =============================== */
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,14 +57,15 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
         options: {
           data: {
             name: formData.name,
-            role: isAdminMode ? 'admin' : 'user',
+            // We set metadata, but the Trigger in SQL handles the real permission
+            role: isAdminMode ? 'admin' : 'user', 
           },
         },
       });
 
       if (error) throw error;
 
-      toast.success('Account created! Please verify your email.');
+      toast.success('Account created! Please verify your email if required.');
       setIsLogin(true);
     } catch (err: any) {
       toast.error(err.message || 'Signup failed');
@@ -72,13 +75,14 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   };
 
   /* ===============================
-     LOGIN
+      LOGIN (FIXED)
      =============================== */
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      // 1. Authenticate with Password
       const { data, error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
@@ -86,16 +90,35 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
 
       if (error || !data.user) throw error;
 
-      const role = data.user.user_metadata?.role;
-      const isAdmin = role === 'admin';
+      // 2. CRITICAL FIX: Fetch the REAL role from the database
+      // This ensures we respect manual admin updates
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single();
 
-      if (isAdminMode && !isAdmin) {
-        throw new Error('You are not authorized as admin');
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        // Fallback: If profile fetch fails, assume 'user' to be safe
+        toast.error('Could not verify permissions. Please try again.');
+        return;
       }
 
-      toast.success(isAdmin ? 'Welcome Admin!' : 'Welcome back!');
-      onAuthSuccess(data.user, isAdmin);
+      const dbRole = profile?.role || 'user';
+      const isActualAdmin = dbRole === 'admin';
+
+      // 3. Verify Admin Mode
+      if (isAdminMode && !isActualAdmin) {
+        await supabase.auth.signOut(); // Kick them out if they try to sneak in
+        throw new Error('Access Denied: You are not an administrator.');
+      }
+
+      toast.success(isActualAdmin ? 'Welcome Admin!' : 'Welcome back!');
+      onAuthSuccess(data.user, isActualAdmin);
+
     } catch (err: any) {
+      console.error(err);
       toast.error(err.message || 'Login failed');
     } finally {
       setLoading(false);
@@ -103,7 +126,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   };
 
   /* ===============================
-     UI
+      UI
      =============================== */
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFFFD] via-[#e8f7ff] to-[#f0ffd9] flex items-center justify-center p-6">
@@ -144,10 +167,10 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
 
               <button
                 onClick={() => setIsAdminMode(!isAdminMode)}
-                className={`mt-4 px-4 py-2 rounded-full text-sm ${
+                className={`mt-4 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                   isAdminMode
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-600'
+                    ? 'bg-purple-600 text-white hover:bg-purple-700'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 {isAdminMode ? 'Switch to User Mode' : 'Admin Login'}
@@ -166,47 +189,64 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
                 {!isLogin && (
                   <div>
                     <Label>Full Name</Label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      required
-                    />
+                    <div className="relative mt-1">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <Input
+                        value={formData.name}
+                        onChange={(e) =>
+                          setFormData({ ...formData, name: e.target.value })
+                        }
+                        required
+                        className="pl-10"
+                        placeholder="John Doe"
+                      />
+                    </div>
                   </div>
                 )}
 
                 <div>
                   <Label>Email</Label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    required
-                  />
+                  <div className="relative mt-1">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      required
+                      className="pl-10"
+                      placeholder="name@example.com"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <Label>Password</Label>
-                  <Input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    required
-                  />
+                  <div className="relative mt-1">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
+                      required
+                      className="pl-10"
+                      placeholder="••••••••"
+                    />
+                  </div>
                 </div>
 
-                <Button disabled={loading} className="w-full py-6">
+                <Button disabled={loading} className={`w-full py-6 font-semibold text-lg ${
+                  isAdminMode ? 'bg-gradient-to-r from-purple-600 to-pink-600' : 'bg-gradient-to-r from-[#3C91E6] to-[#A2D729]'
+                }`}>
                   {loading ? (
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 1 }}
                     >
-                      <Sparkles />
+                      <Sparkles className="w-5 h-5" />
                     </motion.div>
                   ) : isLogin ? (
                     'Log In'
@@ -220,9 +260,9 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
             <div className="mt-6 text-center">
               <button
                 onClick={() => setIsLogin(!isLogin)}
-                className="text-sm text-blue-600 font-semibold"
+                className="text-sm text-blue-600 font-semibold hover:underline"
               >
-                {isLogin ? 'Sign Up' : 'Log In'}
+                {isLogin ? "Don't have an account? Sign Up" : 'Already have an account? Log In'}
               </button>
             </div>
           </div>
