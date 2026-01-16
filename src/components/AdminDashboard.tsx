@@ -28,7 +28,7 @@ interface AdminDashboardProps {
 export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [currentView, setCurrentView] = useState<View>('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
 
   const [stats, setStats] = useState({
     totalRequests: 0,
@@ -38,14 +38,24 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   });
 
   /* ===============================
-     RESPONSIVE HANDLER
+     CLIENT-ONLY RESPONSIVE LOGIC
      =============================== */
   useEffect(() => {
-    const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  if (isDesktop === null) {
+    // Prevent SSR / hydration mismatch
+    return null;
+  }
 
   const navigation = [
     {
@@ -77,11 +87,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50">
       {/* ================= HEADER ================= */}
-      <motion.header
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        className="sticky top-0 z-50 bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 shadow-2xl"
-      >
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-600 via-pink-600 to-purple-700 shadow-2xl">
         <div className="container mx-auto px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -131,7 +137,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
             </div>
           </div>
         </div>
-      </motion.header>
+      </header>
 
       <div className="flex">
         {/* ================= SIDEBAR ================= */}
@@ -161,14 +167,11 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         setCurrentView(item.id);
                         setMobileMenuOpen(false);
                       }}
-                      className={`
-                        w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium
-                        ${
-                          active
-                            ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }
-                      `}
+                      className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl font-medium ${
+                        active
+                          ? `bg-gradient-to-r ${item.color} text-white shadow-lg`
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       <Icon className="w-5 h-5" />
                       {item.label}
@@ -206,7 +209,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           )}
         </AnimatePresence>
 
-        {/* ================= MAIN CONTENT ================= */}
+        {/* ================= MAIN ================= */}
         <main className="flex-1 overflow-auto">
           <div className="container mx-auto px-4 lg:px-6 py-6">
             <AnimatePresence mode="wait">
