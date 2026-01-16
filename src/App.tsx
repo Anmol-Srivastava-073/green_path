@@ -29,13 +29,8 @@ export default function App() {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', sessionUser.id)
-        .single();
-
-      const admin = profile?.role === 'admin';
+      const role = sessionUser.user_metadata?.role;
+      const admin = role === 'admin';
 
       setUser(sessionUser);
       setIsAdmin(admin);
@@ -49,10 +44,10 @@ export default function App() {
   /* ===============================
      AUTH CALLBACK
      =============================== */
-  const handleAuthSuccess = (userData: any, adminMode: boolean) => {
+  const handleAuthSuccess = (userData: any, admin: boolean) => {
     setUser(userData);
-    setIsAdmin(adminMode);
-    setAppState(adminMode ? 'admin-dashboard' : 'dashboard');
+    setIsAdmin(admin);
+    setAppState(admin ? 'admin-dashboard' : 'dashboard');
   };
 
   /* ===============================
