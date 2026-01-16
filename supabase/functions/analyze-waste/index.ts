@@ -39,8 +39,11 @@ serve(async (req) => {
       );
     }
 
+    // ------------------------------------------------------------------
+    //  FIX: Switched from 'gemini-pro-vision' to 'gemini-1.5-flash'
+    // ------------------------------------------------------------------
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -51,20 +54,23 @@ serve(async (req) => {
                 {
                   inlineData: {
                     mimeType: "image/jpeg",
-                    data: imageData.split(",")[1],
+                    // Ensure we strip the header if it exists (e.g., "data:image/jpeg;base64,")
+                    data: imageData.includes(",") ? imageData.split(",")[1] : imageData,
                   },
                 },
                 {
                   text: `
-Return STRICT JSON only:
-{
-  "recyclable": boolean,
-  "itemName": string,
-  "binType": string,
-  "tips": string[]
-}
-
-Context: Waste segregation rules in India.
+                    Analyze this image of waste/trash. 
+                    You are an expert in Indian waste segregation rules.
+                    
+                    Return ONLY raw JSON. Do not use Markdown formatting (no \`\`\`json).
+                    The JSON must match this structure exactly:
+                    {
+                      "recyclable": boolean,
+                      "itemName": "Short name of the item",
+                      "binType": "Green Bin (Wet) or Blue Bin (Dry) or Hazardous",
+                      "tips": ["Tip 1", "Tip 2"]
+                    }
                   `,
                 },
               ],
@@ -76,11 +82,24 @@ Context: Waste segregation rules in India.
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(errText);
+      console.error("Gemini API Error:", errText);
+      throw new Error(`Gemini API Error: ${response.statusText}`);
     }
 
     const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    // Safety check for the response structure
+    const candidate = data.candidates?.[0];
+    if (!candidate) {
+         throw new Error("No response candidates from Gemini");
+    }
+
+    let text = candidate.content?.parts?.[0]?.text;
+
+    // Clean up potential markdown formatting if Gemini ignores instructions
+    if (text) {
+        text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    }
 
     return new Response(
       JSON.stringify({
