@@ -98,6 +98,7 @@ export function LeafletMapView() {
       const { data, error } = await supabase
         .from('waste_posts')
         .select('*')
+        .neq('status', 'collected')
         .order('created_at', { ascending: false });
 
       if (error) {
