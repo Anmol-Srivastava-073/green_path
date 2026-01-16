@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LandingPage } from './components/LandingPage';
 import { AuthPage } from './components/AuthPage';
 import { Dashboard } from './components/Dashboard';
@@ -6,7 +6,9 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { Toaster } from './components/ui/sonner';
 import { createClient } from './utils/supabase/client';
 
-type AppState = 'landing' | 'auth' | 'dashboard';
+type AppState = 'landing' | 'auth' | 'dashboard' | 'admin-dashboard';
+
+const supabase = createClient();
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('landing');
@@ -14,80 +16,48 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const supabase = createClient();
-
   /* ===============================
-     CHECK SESSION + ADMIN ROLE
+     RESTORE SESSION
      =============================== */
   useEffect(() => {
-    const init = async () => {
+    const restore = async () => {
       const { data } = await supabase.auth.getSession();
       const sessionUser = data.session?.user || null;
 
-      setUser(sessionUser);
-
-      if (sessionUser) {
-        // OPTION A: admin via user metadata
-        if (sessionUser.user_metadata?.role === 'admin') {
-          setIsAdmin(true);
-        } else {
-          // OPTION B: admin via profiles table
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', sessionUser.id)
-            .single();
-
-          setIsAdmin(profile?.role === 'admin');
-        }
-
-        setAppState('dashboard');
+      if (!sessionUser) {
+        setLoading(false);
+        return;
       }
 
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', sessionUser.id)
+        .single();
+
+      const admin = profile?.role === 'admin';
+
+      setUser(sessionUser);
+      setIsAdmin(admin);
+      setAppState(admin ? 'admin-dashboard' : 'dashboard');
       setLoading(false);
     };
 
-    init();
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_, session) => {
-        const sessionUser = session?.user || null;
-        setUser(sessionUser);
-
-        if (sessionUser) {
-          if (sessionUser.user_metadata?.role === 'admin') {
-            setIsAdmin(true);
-          } else {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', sessionUser.id)
-              .single();
-
-            setIsAdmin(profile?.role === 'admin');
-          }
-
-          setAppState('dashboard');
-        } else {
-          setIsAdmin(false);
-          setAppState('landing');
-        }
-      }
-    );
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    restore();
   }, []);
 
   /* ===============================
-     AUTH HANDLERS
+     AUTH CALLBACK
      =============================== */
-  const handleAuthSuccess = (userData: any) => {
+  const handleAuthSuccess = (userData: any, adminMode: boolean) => {
     setUser(userData);
-    setAppState('dashboard');
+    setIsAdmin(adminMode);
+    setAppState(adminMode ? 'admin-dashboard' : 'dashboard');
   };
 
+  /* ===============================
+     LOGOUT
+     =============================== */
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -95,16 +65,8 @@ export default function App() {
     setAppState('landing');
   };
 
-  /* ===============================
-     LOADING STATE
-     =============================== */
-  if (loading) {
-    return null; // or spinner if you want
-  }
+  if (loading) return null;
 
-  /* ===============================
-     LANDING
-     =============================== */
   if (appState === 'landing') {
     return (
       <>
@@ -114,9 +76,6 @@ export default function App() {
     );
   }
 
-  /* ===============================
-     AUTH
-     =============================== */
   if (appState === 'auth') {
     return (
       <>
@@ -129,9 +88,6 @@ export default function App() {
     );
   }
 
-  /* ===============================
-     DASHBOARD SWITCH
-     =============================== */
   return (
     <>
       {isAdmin ? (
