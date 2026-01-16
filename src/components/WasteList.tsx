@@ -15,6 +15,9 @@ import { toast } from "sonner@2.0.3";
 import { Button } from "./ui/button";
 import { createClient } from "../utils/supabase/client";
 
+/* ===============================
+   TYPES
+   =============================== */
 interface WastePost {
   id: string;
   type: string;
@@ -27,6 +30,9 @@ interface WastePost {
   createdAt: string;
 }
 
+/* ===============================
+   COMPONENT
+   =============================== */
 export function WasteList() {
   const [wastePosts, setWastePosts] = useState<WastePost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,15 +43,23 @@ export function WasteList() {
   useEffect(() => {
     loadCurrentUser();
     loadWastePosts();
+
+    // refresh list when a waste is added/deleted
+    window.addEventListener("wastePostAdded", loadWastePosts);
+    return () =>
+      window.removeEventListener("wastePostAdded", loadWastePosts);
   }, []);
 
+  /* ===============================
+     AUTH
+     =============================== */
   const loadCurrentUser = async () => {
     const { data } = await supabase.auth.getSession();
     setCurrentUserId(data.session?.user?.id || null);
   };
 
   /* ===============================
-     LOAD WASTE POSTS (CORRECT)
+     LOAD POSTS
      =============================== */
   const loadWastePosts = async () => {
     setLoading(true);
@@ -73,7 +87,7 @@ export function WasteList() {
       }));
 
       setWastePosts(mapped);
-    } catch (err: any) {
+    } catch (err) {
       console.error("[WASTE LIST] Load error:", err);
       toast.error("Failed to load waste posts");
     } finally {
@@ -82,7 +96,7 @@ export function WasteList() {
   };
 
   /* ===============================
-     DELETE WASTE POST (CORRECT)
+     DELETE POST
      =============================== */
   const handleDelete = async (postId: string) => {
     try {
@@ -95,7 +109,7 @@ export function WasteList() {
 
       toast.success("Waste post deleted");
       loadWastePosts();
-    } catch (err: any) {
+    } catch (err) {
       console.error("[WASTE LIST] Delete error:", err);
       toast.error("Failed to delete post");
     }
@@ -119,6 +133,21 @@ export function WasteList() {
     }
   };
 
+  const getColor = (type: string) => {
+    switch (type) {
+      case "batteries":
+        return "bg-yellow-100 text-yellow-700";
+      case "plastic":
+        return "bg-blue-100 text-blue-700";
+      case "electronics":
+        return "bg-purple-100 text-purple-700";
+      case "oil":
+        return "bg-orange-100 text-orange-700";
+      default:
+        return "bg-gray-100 text-gray-700";
+    }
+  };
+
   const getTimeAgo = (createdAt: string) => {
     const now = new Date();
     const created = new Date(createdAt);
@@ -133,11 +162,27 @@ export function WasteList() {
   };
 
   /* ===============================
+     HOTSPOT GROUPING
+     =============================== */
+  const hotspots = wastePosts.reduce((acc, item) => {
+    const area = item.location.split(",")[0];
+    if (!acc[area]) {
+      acc[area] = { area, items: [] as WastePost[] };
+    }
+    acc[area].items.push(item);
+    return acc;
+  }, {} as Record<string, { area: string; items: WastePost[] }>);
+
+  const hotspotList = Object.values(hotspots).sort(
+    (a, b) => b.items.length - a.items.length
+  );
+
+  /* ===============================
      RENDER
      =============================== */
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex justify-center py-20">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -161,56 +206,79 @@ export function WasteList() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold">Waste Hotspots</h2>
+      {/* HEADER */}
+      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+        <h2 className="text-3xl font-bold mb-1">Waste Hotspots</h2>
+        <p className="text-gray-500">
+          Areas with the highest reported waste concentration
+        </p>
+      </motion.div>
 
-      {wastePosts.map((item) => (
-        <motion.div
-          key={item.id}
-          className="bg-white rounded-2xl shadow-lg p-5 border"
-          whileHover={{ scale: 1.02 }}
-        >
-          <div className="flex items-start gap-4">
-            <div className="p-3 rounded-xl bg-gray-100">
-              {getIcon(item.type)}
-            </div>
-
-            <div className="flex-1">
-              <h4 className="font-semibold text-lg">{item.title}</h4>
-
-              <div className="flex flex-wrap gap-4 text-sm text-gray-500 mt-1">
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  {item.location}
-                </div>
-                <div className="flex items-center gap-1">
-                  <User className="w-4 h-4" />
-                  {item.userName}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {getTimeAgo(item.createdAt)}
-                </div>
-              </div>
-
-              {item.description && (
-                <p className="text-sm text-gray-600 mt-2">
-                  {item.description}
-                </p>
-              )}
-            </div>
-
-            {currentUserId === item.userId && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleDelete(item.id)}
-                className="text-red-500 hover:text-red-700"
-              >
-                <Trash className="w-4 h-4" />
-              </Button>
-            )}
+      {/* STATS */}
+      <div className="grid md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-6 shadow">
+          <MapPin className="w-6 h-6 mb-2 text-[#3C91E6]" />
+          <div className="text-3xl font-bold">{wastePosts.length}</div>
+          <div className="text-sm text-gray-500">Total Pins</div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow">
+          <TrendingUp className="w-6 h-6 mb-2 text-green-600" />
+          <div className="text-3xl font-bold">{hotspotList.length}</div>
+          <div className="text-sm text-gray-500">Hotspots</div>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow">
+          <Battery className="w-6 h-6 mb-2 text-orange-600" />
+          <div className="text-3xl font-bold">
+            {hotspotList[0]?.items.length || 0}
           </div>
-        </motion.div>
+          <div className="text-sm text-gray-500">Top Area Count</div>
+        </div>
+      </div>
+
+      {/* HOTSPOTS */}
+      {hotspotList.map((hotspot) => (
+        <div key={hotspot.area} className="bg-white rounded-2xl shadow">
+          <div className="bg-gradient-to-r from-[#3C91E6] to-[#A2D729] text-white p-5 rounded-t-2xl flex justify-between">
+            <h3 className="text-lg font-bold">{hotspot.area}</h3>
+            <span>{hotspot.items.length} items</span>
+          </div>
+
+          <div className="p-5 space-y-3">
+            {hotspot.items.map((item) => (
+              <motion.div
+                key={item.id}
+                className="flex gap-4 p-4 bg-gray-50 rounded-xl"
+                whileHover={{ scale: 1.02 }}
+              >
+                <div className={`p-3 rounded-xl ${getColor(item.type)}`}>
+                  {getIcon(item.type)}
+                </div>
+
+                <div className="flex-1">
+                  <h4 className="font-semibold">{item.title}</h4>
+                  <div className="text-sm text-gray-500 flex gap-4">
+                    <span>{item.location}</span>
+                    <span>{getTimeAgo(item.createdAt)}</span>
+                  </div>
+                  {item.description && (
+                    <p className="text-sm mt-1">{item.description}</p>
+                  )}
+                </div>
+
+                {currentUserId === item.userId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDelete(item.id)}
+                    className="text-red-500"
+                  >
+                    <Trash className="w-4 h-4" />
+                  </Button>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
