@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { MapPin, Battery, Trash2, Package, Droplet, RefreshCw, Locate, Navigation } from 'lucide-react';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { createClient } from '../utils/supabase/client'; // Import createClient
 import { toast } from 'sonner@2.0.3';
 import { Button } from './ui/button';
 import L from 'leaflet';
@@ -33,6 +34,9 @@ export function LeafletMapView() {
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
   const userMarkerRef = useRef<L.Marker | null>(null);
+
+  // Initialize Supabase Client
+  const supabase = createClient();
 
   useEffect(() => {
     loadWastePosts();
@@ -90,37 +94,34 @@ export function LeafletMapView() {
     try {
       console.log('[LEAFLET MAP] Loading waste posts');
       
-      const apiUrl = `https://${projectId}.supabase.co/functions/v1/analyze-waste/waste-posts`;
-      console.log('[LEAFLET MAP] Calling API:', apiUrl);
-      
-      const response = await fetch(apiUrl, {
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-        },
-      });
+      // --- CHANGED: Use Supabase Client directly instead of API fetch ---
+      const { data, error } = await supabase
+        .from('waste_posts')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      console.log('[LEAFLET MAP] Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[LEAFLET MAP] API error response:', errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch {
-          errorData = { error: errorText };
-        }
-        
-        toast.error(errorData.error || `Failed to load waste posts (Status: ${response.status})`);
-        return;
+      if (error) {
+        console.error('[LEAFLET MAP] Supabase error:', error);
+        throw error;
       }
 
-      const data = await response.json();
-      console.log('[LEAFLET MAP] Loaded', data.posts?.length || 0, 'posts');
+      console.log('[LEAFLET MAP] Loaded', data?.length || 0, 'posts');
 
-      setWastePosts(data.posts || []);
-      toast.success(`Loaded ${data.posts?.length || 0} waste locations`);
+      // Map database fields to interface if necessary (or ensure DB matches interface)
+      // Assuming DB fields match WastePost interface directly or close enough
+      const formattedPosts: WastePost[] = (data || []).map((post: any) => ({
+        id: post.id,
+        type: post.bin_type || 'other', // Handle mapping if column names differ
+        title: post.item_name || 'Waste Item',
+        location: `${post.latitude?.toFixed(4)}, ${post.longitude?.toFixed(4)}`,
+        latitude: post.latitude,
+        longitude: post.longitude,
+        userName: 'User', // You might need to join profiles to get actual names
+        description: post.tips?.[0] || '',
+      }));
+
+      setWastePosts(formattedPosts);
+      toast.success(`Loaded ${formattedPosts.length} waste locations`);
     } catch (error: any) {
       console.error('[LEAFLET MAP] Error loading waste posts:', error);
       toast.error(`Failed to load waste posts: ${error.message}`);
