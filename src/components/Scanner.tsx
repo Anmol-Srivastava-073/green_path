@@ -105,7 +105,7 @@ export function Scanner() {
           Gemini AI Waste Scanner
         </h2>
         <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-          Photo upload karo aur Gemini AI batayega ki kachra recyclable hai ya nahi aur kaunse bin mein daalna hai.
+          Upload the Photo to see if the trash is recyclable or not.
         </p>
       </motion.div>
 
