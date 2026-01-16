@@ -1,34 +1,18 @@
-import { useState, useRef } from "react";
-import { motion } from "motion/react";
+import { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
   CheckCircle,
   Upload,
   Locate,
   MapPin,
-} from "lucide-react";
-import { toast } from "sonner@2.0.3";
-import { createClient } from "../utils/supabase/client";
-
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-
-function LocationPicker({
-  onSelect,
-}: {
-  onSelect: (lat: number, lng: number) => void;
-}) {
-  useMapEvents({
-    click(e) {
-      onSelect(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { createClient } from '../utils/supabase/client';
 
 export function AddWaste() {
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState('');
+  const [description, setDescription] = useState('');
   const [image, setImage] = useState<string | null>(null);
 
   const [coords, setCoords] =
@@ -37,15 +21,31 @@ export function AddWaste() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [leaflet, setLeaflet] = useState<any>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
   /* ===============================
-     GPS AUTO DETECT (OPTIONAL)
+     LOAD LEAFLET (CLIENT ONLY)
+     =============================== */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    Promise.all([
+      import('react-leaflet'),
+      import('leaflet/dist/leaflet.css'),
+    ]).then(([leafletModule]) => {
+      setLeaflet(leafletModule);
+    });
+  }, []);
+
+  /* ===============================
+     GPS AUTO DETECT
      =============================== */
   const detectGPS = () => {
     if (!navigator.geolocation) {
-      toast.error("GPS not supported");
+      toast.error('GPS not supported');
       return;
     }
 
@@ -55,9 +55,9 @@ export function AddWaste() {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
         });
-        toast.success("GPS location set");
+        toast.success('GPS location set');
       },
-      () => toast.error("Unable to detect GPS")
+      () => toast.error('Unable to detect GPS')
     );
   };
 
@@ -80,7 +80,7 @@ export function AddWaste() {
     e.preventDefault();
 
     if (!coords) {
-      toast.error("Please select location on map or use GPS");
+      toast.error('Please select location on map or use GPS');
       return;
     }
 
@@ -89,9 +89,9 @@ export function AddWaste() {
     try {
       const { data } = await supabase.auth.getSession();
       const user = data.session?.user;
-      if (!user) throw new Error("Not logged in");
+      if (!user) throw new Error('Not logged in');
 
-      const { error } = await supabase.from("waste_posts").insert({
+      const { error } = await supabase.from('waste_posts').insert({
         user_id: user.id,
         item_name: title,
         bin_type: type,
@@ -103,28 +103,28 @@ export function AddWaste() {
 
       if (error) throw error;
 
-      toast.success("Waste location added!");
-      window.dispatchEvent(new CustomEvent("wastePostAdded"));
+      toast.success('Waste location added!');
+      window.dispatchEvent(new CustomEvent('wastePostAdded'));
       setSubmitted(true);
 
       setTimeout(() => {
         setSubmitted(false);
-        setTitle("");
-        setType("");
-        setDescription("");
+        setTitle('');
+        setType('');
+        setDescription('');
         setImage(null);
         setCoords(null);
       }, 2000);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to add waste");
+      toast.error('Failed to add waste');
     } finally {
       setLoading(false);
     }
   };
 
   /* ===============================
-     SUCCESS
+     SUCCESS STATE
      =============================== */
   if (submitted) {
     return (
@@ -141,6 +141,21 @@ export function AddWaste() {
       </motion.div>
     );
   }
+
+  /* ===============================
+     MAP PICKER (INLINE, SAFE)
+     =============================== */
+  const LocationPicker =
+    leaflet &&
+    function ({ onSelect }: { onSelect: (lat: number, lng: number) => void }) {
+      const { useMapEvents } = leaflet;
+      useMapEvents({
+        click(e: any) {
+          onSelect(e.latlng.lat, e.latlng.lng);
+        },
+      });
+      return null;
+    };
 
   /* ===============================
      FORM
@@ -176,24 +191,35 @@ export function AddWaste() {
           className="w-full px-4 py-3 border rounded-xl"
         />
 
-        {/* MAP PICKER */}
+        {/* MAP */}
         <div className="h-64 rounded-xl overflow-hidden border">
-          <MapContainer
-            center={coords ? [coords.lat, coords.lng] : [20.5937, 78.9629]}
-            zoom={coords ? 14 : 5}
-            style={{ height: "100%", width: "100%" }}
-          >
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-            <LocationPicker
-              onSelect={(lat, lng) => {
-                setCoords({ lat, lng });
-                toast.success("Location selected");
-              }}
-            />
-            {coords && (
-              <Marker position={[coords.lat, coords.lng]} />
-            )}
-          </MapContainer>
+          {leaflet ? (
+            (() => {
+              const { MapContainer, TileLayer, Marker } = leaflet;
+              return (
+                <MapContainer
+                  center={
+                    coords ? [coords.lat, coords.lng] : [20.5937, 78.9629]
+                  }
+                  zoom={coords ? 14 : 5}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <LocationPicker
+                    onSelect={(lat, lng) => {
+                      setCoords({ lat, lng });
+                      toast.success('Location selected');
+                    }}
+                  />
+                  {coords && <Marker position={[coords.lat, coords.lng]} />}
+                </MapContainer>
+              );
+            })()
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-400">
+              Loading map…
+            </div>
+          )}
         </div>
 
         <button
@@ -226,14 +252,14 @@ export function AddWaste() {
           disabled={loading}
           className="w-full bg-gradient-to-r from-[#3C91E6] to-[#A2D729] text-white py-4 rounded-xl font-semibold"
         >
-          {loading ? "Adding..." : "Add to Map"}
+          {loading ? 'Adding...' : 'Add to Map'}
         </button>
 
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <MapPin />
           {coords
             ? `Selected: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`
-            : "Select location by clicking on map or GPS"}
+            : 'Select location by clicking on map or GPS'}
         </div>
       </form>
     </div>
