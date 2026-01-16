@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import { AdminOverview } from './admin/AdminOverview';
-import { WasteRequestManager } from './admin/WasteRequestManager';
+import { WasteRequestManager } from './admin/ManageRequests.tsx';
 import { OrganizationManager } from './admin/OrganizationManager';
 import { AdminAnalytics } from './admin/AdminAnalytics';
 
