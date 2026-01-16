@@ -13,10 +13,10 @@ import {
   Package,
 } from 'lucide-react';
 
-import { AdminOverview } from './admin/AdminOverview';
+import { AdminOverview } from './admin/AdminOverview.tsx';
 import { WasteRequestManager } from './admin/ManageRequests.tsx';
-import { OrganizationManager } from './admin/OrganizationManager';
-import { AdminAnalytics } from './admin/AdminAnalytics';
+import { OrganizationManager } from './admin/OrganizationManager.tsx';
+import { AdminAnalytics } from './admin/AdminAnalytics.tsx';
 
 type View = 'overview' | 'requests' | 'organizations' | 'analytics';
 
