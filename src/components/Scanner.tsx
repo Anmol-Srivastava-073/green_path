@@ -1,14 +1,7 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "motion/react";
-import {
-  Camera,
-  Sparkles,
-  CheckCircle,
-  XCircle,
-  Info,
-  Zap,
-} from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { motion, AnimatePresence } from "framer-motion";
+import { Camera, Sparkles, CheckCircle, XCircle, Zap } from "lucide-react";
+import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 export function Scanner() {
@@ -21,9 +14,9 @@ export function Scanner() {
     tips: string[];
   } | null>(null);
 
-  /* ===============================
-     IMAGE UPLOAD
-     =============================== */
+  /* -------------------------
+       IMAGE UPLOAD
+  --------------------------*/
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -36,67 +29,63 @@ export function Scanner() {
     reader.readAsDataURL(file);
   };
 
-  /* ===============================
-     GEMINI ANALYSIS (FINAL)
-     =============================== */
+  /* -------------------------
+       AI ANALYSIS
+  --------------------------*/
   const analyzeImage = async () => {
     if (!selectedImage) return;
-
     setScanning(true);
 
     try {
       const response = await fetch(
-  `https://${projectId}.supabase.co/functions/v1/analyze-waste`,
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      // ✅ VALID JWT
-      "Authorization": `Bearer ${publicAnonKey}`,
-    },
-    body: JSON.stringify({
-      imageData: selectedImage,
-    }),
-  }
-);
-
+        `https://${projectId}.supabase.co/functions/v1/analyze-waste`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            // ✔ REQUIRED FOR PUBLIC EDGE FUNCTIONS
+            "apikey": publicAnonKey,
+            "Authorization": `Bearer ${publicAnonKey}`,
+          },
+          body: JSON.stringify({
+            imageData: selectedImage,
+          }),
+        }
+      );
 
       if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `HTTP ${response.status}`);
+        throw new Error(await response.text());
       }
 
       const data = await response.json();
 
       if (!data.success) {
-        throw new Error(data.error || "Gemini analysis failed");
+        throw new Error(data.error || "AI analysis failed");
       }
 
       setResult(data.result);
       toast.success("AI analysis complete!");
-    } catch (err: any) {
-      console.error("[SCANNER ERROR]", err);
+    } catch (err) {
+      console.error("Scanner error:", err);
       toast.error("Failed to analyze image");
     } finally {
       setScanning(false);
     }
   };
 
-  /* ===============================
-     UI
-     =============================== */
   return (
     <div className="max-w-3xl space-y-6">
+      {/* Header */}
       <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
         <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#3C91E6] to-[#A2D729]">
           AI Recycling Scanner
         </h2>
         <p className="text-gray-600">
-          Upload an image to identify waste and disposal instructions
+          Upload an image to identify waste and disposal instructions.
         </p>
       </motion.div>
 
-      {/* INFO */}
+      {/* Info Banner */}
       <div className="bg-gradient-to-r from-blue-50 to-green-50 border rounded-2xl p-5">
         <div className="flex items-center gap-3">
           <Sparkles className="w-6 h-6 text-[#3C91E6]" />
@@ -105,13 +94,13 @@ export function Scanner() {
               Powered by Google Gemini <Zap className="w-4 h-4 text-green-500" />
             </p>
             <p className="text-sm text-gray-600">
-              Uses AI trained on Indian waste-segregation rules
+              Uses AI trained on Indian waste-segregation rules.
             </p>
           </div>
         </div>
       </div>
 
-      {/* UPLOAD / PREVIEW */}
+      {/* Upload / Preview */}
       <div className="bg-white rounded-2xl shadow-xl p-8">
         <AnimatePresence mode="wait">
           {!selectedImage ? (
@@ -131,16 +120,8 @@ export function Scanner() {
               />
             </motion.label>
           ) : (
-            <motion.div
-              key="preview"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-4"
-            >
-              <img
-                src={selectedImage}
-                className="w-full h-80 object-cover rounded-xl"
-              />
+            <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+              <img src={selectedImage} className="w-full h-80 object-cover rounded-xl" />
 
               {!result && !scanning && (
                 <button
@@ -167,6 +148,7 @@ export function Scanner() {
                   initial={{ scale: 0.9 }}
                   animate={{ scale: 1 }}
                 >
+                  {/* Result header */}
                   <div className="flex items-center gap-3 mb-3">
                     {result.recyclable ? (
                       <CheckCircle className="text-green-600 w-8 h-8" />
@@ -175,22 +157,22 @@ export function Scanner() {
                     )}
                     <div>
                       <h3 className="text-xl font-bold">
-                        {result.recyclable
-                          ? "Recyclable"
-                          : "Not Recyclable"}
+                        {result.recyclable ? "Recyclable" : "Not Recyclable"}
                       </h3>
                       <p>{result.itemName}</p>
                     </div>
                   </div>
 
+                  {/* Bin info */}
                   <p className="mb-2">
                     <strong>Bin:</strong> {result.binType}
                   </p>
 
+                  {/* Tips */}
                   <div>
                     <strong>Tips:</strong>
                     <ul className="list-disc pl-5 mt-2">
-                      {result.tips.map((t, i) => (
+                      {(result.tips || []).map((t, i) => (
                         <li key={i}>{t}</li>
                       ))}
                     </ul>
