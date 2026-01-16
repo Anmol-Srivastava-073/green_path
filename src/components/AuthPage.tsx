@@ -22,10 +22,10 @@ interface AuthPageProps {
 
 export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   const [mounted, setMounted] = useState(false);
-
   const [isLogin, setIsLogin] = useState(true);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -42,7 +42,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   if (!mounted) return null;
 
   /* ===============================
-     SIGN UP (USER ONLY)
+     SIGN UP
      =============================== */
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +55,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
         options: {
           data: {
             name: formData.name,
+            role: isAdminMode ? 'admin' : 'user',
           },
         },
       });
@@ -85,15 +86,8 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
 
       if (error || !data.user) throw error;
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
-
-      if (profileError) throw profileError;
-
-      const isAdmin = profile?.role === 'admin';
+      const role = data.user.user_metadata?.role;
+      const isAdmin = role === 'admin';
 
       if (isAdminMode && !isAdmin) {
         throw new Error('You are not authorized as admin');
@@ -109,23 +103,22 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
   };
 
   /* ===============================
-     UI (UNCHANGED)
+     UI
      =============================== */
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FAFFFD] via-[#e8f7ff] to-[#f0ffd9] flex items-center justify-center p-6">
-      <div className="w-full max-w-md relative z-10">
+      <div className="w-full max-w-md">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <motion.button
             onClick={onBack}
-            className="mb-6 flex items-center gap-2 text-[#342E37]/60 hover:text-[#342E37]"
+            className="mb-6 flex items-center gap-2 text-gray-500 hover:text-gray-800"
             whileHover={{ x: -5 }}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Home
           </motion.button>
 
-          <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border">
-            {/* Header */}
+          <div className="bg-white rounded-3xl shadow-2xl p-8">
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-3 mb-4">
                 <div
@@ -149,7 +142,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
                 </div>
               </div>
 
-              <motion.button
+              <button
                 onClick={() => setIsAdminMode(!isAdminMode)}
                 className={`mt-4 px-4 py-2 rounded-full text-sm ${
                   isAdminMode
@@ -158,7 +151,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
                 }`}
               >
                 {isAdminMode ? 'Switch to User Mode' : 'Admin Login'}
-              </motion.button>
+              </button>
             </div>
 
             <AnimatePresence mode="wait">
@@ -186,6 +179,7 @@ export function AuthPage({ onBack, onAuthSuccess }: AuthPageProps) {
                 <div>
                   <Label>Email</Label>
                   <Input
+                    type="email"
                     value={formData.email}
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
